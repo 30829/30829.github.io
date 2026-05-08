@@ -1,1 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數學加法大挑戰</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap');
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            overflow: hidden;
+        }
 
+        .game-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 2rem;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 500px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .number-display {
+            font-family: 'ZCOOL KuaiLe', cursive;
+            font-size: 5rem;
+            color: #4a5568;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .option-btn {
+            transition: transform 0.2s, background-color 0.2s;
+            cursor: pointer;
+        }
+
+        .option-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .option-btn:active {
+            transform: scale(0.95);
+        }
+
+        .progress-bar {
+            height: 10px;
+            background: #edf2f7;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        #timer-fill {
+            height: 100%;
+            background: #48bb78;
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #f00;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-card animate__animated animate__fadeInDown" id="game-container">
+        <!-- 開始畫面 -->
+        <div id="start-screen">
+            <h1 class="text-4xl font-bold text-indigo-600 mb-6">數學加法大挑戰</h1>
+            <p class="text-gray-600 mb-8">準備好提升你的心算速度了嗎？</p>
+            <div class="space-y-4">
+                <button onclick="startGame(1)" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition">新手模式 (1-10)</button>
+                <button onclick="startGame(2)" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition">進階模式 (1-50)</button>
+                <button onclick="startGame(3)" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transition">天才模式 (1-100)</button>
+            </div>
+        </div>
+
+        <!-- 遊戲畫面 -->
+        <div id="play-screen" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div class="text-lg font-semibold text-indigo-500">分數: <span id="score">0</span></div>
+                <div class="text-lg font-semibold text-orange-500">最高紀錄: <span id="high-score">0</span></div>
+            </div>
+
+            <div class="number-display mb-8" id="question-text">
+                5 + 3
+            </div>
+
+            <div class="grid grid-cols-2 gap-4" id="options-grid">
+                <!-- 選項按鈕會動態生成 -->
+            </div>
+
+            <div class="progress-bar">
+                <div id="timer-fill"></div>
+            </div>
+        </div>
+
+        <!-- 結束畫面 -->
+        <div id="end-screen" class="hidden">
+            <h2 class="text-3xl font-bold text-gray-800 mb-4">時間到！</h2>
+            <p class="text-5xl font-bold text-indigo-600 mb-6" id="final-score">0</p>
+            <p class="text-gray-600 mb-8">太棒了！繼續加油！</p>
+            <button onclick="resetGame()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition">再玩一次</button>
+        </div>
+    </div>
+
+    <!-- 音效與回饋訊息容器 -->
+    <div id="feedback" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 pointer-events-none text-2xl font-bold"></div>
+
+    <script>
+        let currentLevel = 1;
+        let score = 0;
+        let highScore = localStorage.getItem('mathHighScore') || 0;
+        let timeLeft = 100;
+        let timerInterval;
+        let correctAnswer;
+        const gameDuration = 10; // 每題秒數
+
+        const startScreen = document.getElementById('start-screen');
+        const playScreen = document.getElementById('play-screen');
+        const endScreen = document.getElementById('end-screen');
+        const questionText = document.getElementById('question-text');
+        const optionsGrid = document.getElementById('options-grid');
+        const scoreDisplay = document.getElementById('score');
+        const highScoreDisplay = document.getElementById('high-score');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const timerFill = document.getElementById('timer-fill');
+        const feedback = document.getElementById('feedback');
+
+        highScoreDisplay.innerText = highScore;
+
+        function startGame(level) {
+            currentLevel = level;
+            score = 0;
+            scoreDisplay.innerText = score;
+            startScreen.classList.add('hidden');
+            endScreen.classList.add('hidden');
+            playScreen.classList.remove('hidden');
+            nextQuestion();
+        }
+
+        function nextQuestion() {
+            clearInterval(timerInterval);
+            resetTimer();
+
+            let maxNum = currentLevel === 1 ? 10 : (currentLevel === 2 ? 50 : 100);
+            let num1 = Math.floor(Math.random() * maxNum) + 1;
+            let num2 = Math.floor(Math.random() * maxNum) + 1;
+            correctAnswer = num1 + num2;
+
+            questionText.innerText = `${num1} + ${num2}`;
+            questionText.classList.remove('animate__bounceIn');
+            void questionText.offsetWidth; // 強制重繪
+            questionText.classList.add('animate__bounceIn');
+
+            // 生成選項
+            let options = [correctAnswer];
+            while (options.length < 4) {
+                let wrong = correctAnswer + (Math.floor(Math.random() * 10) - 5);
+                if (wrong > 0 && !options.includes(wrong)) {
+                    options.push(wrong);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+
+            optionsGrid.innerHTML = '';
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn bg-white border-2 border-indigo-200 hover:border-indigo-500 text-2xl font-bold py-4 rounded-2xl shadow-sm text-gray-700';
+                btn.innerText = opt;
+                btn.onclick = () => checkAnswer(opt, btn);
+                optionsGrid.appendChild(btn);
+            });
+
+            startTimer();
+        }
+
+        function checkAnswer(selected, btn) {
+            if (selected === correctAnswer) {
+                score++;
+                scoreDisplay.innerText = score;
+                showFeedback('太棒了！', 'text-green-500');
+                btn.classList.add('bg-green-500', 'text-white');
+                setTimeout(nextQuestion, 300);
+            } else {
+                btn.classList.add('bg-red-500', 'text-white', 'animate__shakeX');
+                showFeedback('再試試看！', 'text-red-500');
+                // 扣掉一點時間作為懲罰
+                timeLeft -= 20;
+            }
+        }
+
+        function startTimer() {
+            timeLeft = 100;
+            const step = 1; // 每 100ms 減少多少
+            timerInterval = setInterval(() => {
+                timeLeft -= step;
+                timerFill.style.width = timeLeft + '%';
+                
+                if (timeLeft <= 30) {
+                    timerFill.style.backgroundColor = '#f56565';
+                } else {
+                    timerFill.style.backgroundColor = '#48bb78';
+                }
+
+                if (timeLeft <= 0) {
+                    gameOver();
+                }
+            }, 100);
+        }
+
+        function resetTimer() {
+            timerFill.style.width = '100%';
+            timerFill.style.backgroundColor = '#48bb78';
+        }
+
+        function showFeedback(text, colorClass) {
+            feedback.innerText = text;
+            feedback.className = `fixed bottom-20 left-1/2 transform -translate-x-1/2 pointer-events-none text-3xl font-bold animate__animated animate__fadeOutUp ${colorClass}`;
+            setTimeout(() => {
+                feedback.innerText = '';
+            }, 1000);
+        }
+
+        function gameOver() {
+            clearInterval(timerInterval);
+            playScreen.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+            finalScoreDisplay.innerText = `總得分：${score}`;
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('mathHighScore', highScore);
+                highScoreDisplay.innerText = highScore;
+                finalScoreDisplay.innerText += " (新紀錄！)";
+            }
+        }
+
+        function resetGame() {
+            endScreen.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
